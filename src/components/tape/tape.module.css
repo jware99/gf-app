@@ -1,0 +1,33 @@
+/*
+ * Torn-edge treatment ported verbatim from the prototype's .ct-tape:before
+ * /:after. Kept as plain CSS (rather than Tailwind utilities) since a
+ * repeating diagonal-gradient triangle pattern doesn't map cleanly onto
+ * utility classes. Colors are the prototype's --paper token, duplicated
+ * here as a literal so this file has no runtime dependency on the
+ * Tailwind theme config.
+ */
+.tape {
+  position: relative;
+}
+
+.tape::before,
+.tape::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background: linear-gradient(135deg, #eef1e9 50%, transparent 50%) 0 0/16px
+      16px,
+    linear-gradient(-135deg, #eef1e9 50%, transparent 50%) 0 0/16px 16px;
+  background-repeat: repeat-x;
+}
+
+.tape::before {
+  top: -1px;
+  transform: rotate(180deg);
+}
+
+.tape::after {
+  bottom: -1px;
+}
