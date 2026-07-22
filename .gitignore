@@ -41,6 +41,9 @@ yarn-error.log*
 /prisma/*.db
 /prisma/*.db-journal
 
+# one-off personal-data export used during the Postgres migration
+/dev-data-export.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

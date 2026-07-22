@@ -7,8 +7,14 @@ regular equivalent product, and track the running total against the IRS
 
 ## Stack
 
-Next.js 15 (App Router, TypeScript) · Tailwind CSS · Prisma (SQLite dev /
-Postgres-ready for prod) · Zod · Anthropic TypeScript SDK · Vitest.
+Next.js 15 (App Router, TypeScript) · Tailwind CSS · Prisma (Postgres, via
+[Neon](https://neon.tech), for both dev and prod) · Zod · Anthropic
+TypeScript SDK · Vitest.
+
+Dev and prod are separate Postgres databases (Neon branches) rather than
+SQLite-locally/Postgres-in-prod — Prisma can't share one migration history
+across two different SQL dialects, so using the same engine everywhere
+avoids dev/prod drift. See [Deploying to production](#deploying-to-production).
 
 ## Architecture
 
@@ -32,10 +38,15 @@ hook — Node-only, used by route handlers and the NextAuth route handler).
 
 ```bash
 npm install
-cp .env.example .env   # fill in ANTHROPIC_API_KEY, AUTH_SECRET, AUTH_GOOGLE_ID/SECRET
-npx prisma migrate dev # creates the local SQLite dev database
+cp .env.example .env   # fill in ANTHROPIC_API_KEY, DATABASE_URL, AUTH_SECRET, AUTH_GOOGLE_ID/SECRET
+npx prisma migrate dev # applies migrations to your Postgres dev database
 npm run dev
 ```
+
+`DATABASE_URL` needs a real Postgres connection string even for local dev —
+the free tier of [Neon](https://neon.tech) works well; create a project and
+use its connection string (or a separate branch, so dev and prod data stay
+apart — see [Deploying to production](#deploying-to-production)).
 
 Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to
 `/login`. See [Authentication](#authentication) below to set up Google
@@ -88,6 +99,67 @@ first** — a one-time migration, not something that happens on every login.
    ```
 7. In production, also set `AUTH_URL` to your deployed URL — Auth.js can't
    always infer it from the request behind some proxies/CDNs.
+
+## Deploying to production
+
+Hosted on [Vercel](https://vercel.com), database on [Neon](https://neon.tech)
+(Postgres). One-time setup:
+
+### 1. Database (Neon)
+
+Create a free Neon account and one project. Its default branch is your
+**production** database; add a second branch (e.g. named `dev`) for local
+development — same schema, isolated data, no separate account needed.
+Copy each branch's connection string.
+
+### 2. Push to GitHub
+
+This repo needs to live on GitHub for Vercel's auto-deploy-on-push flow.
+`gh repo create` (or the GitHub web UI) + `git push` is all that's needed —
+no GitHub Actions/CI config required for a basic deploy.
+
+### 3. Vercel project
+
+Import the GitHub repo at [vercel.com/new](https://vercel.com/new). Vercel
+auto-detects Next.js — no build command overrides are needed since
+[package.json](package.json)'s `build` script already runs
+`prisma migrate deploy` before `next build`, and `postinstall` runs
+`prisma generate`, so every deploy applies pending migrations and
+regenerates the Prisma client automatically.
+
+Set these environment variables in the Vercel project's settings
+(**Production** scope — use a *different* `AUTH_SECRET` than local dev):
+
+| Variable | Value |
+|---|---|
+| `ANTHROPIC_API_KEY` | same as local |
+| `ANTHROPIC_MODEL` | same as local |
+| `DATABASE_URL` | Neon **production** branch connection string |
+| `AUTH_SECRET` | a newly generated secret (see command in [Authentication](#authentication)) — don't reuse the local one |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | same Google OAuth client as local |
+| `AUTH_URL` | your production domain, e.g. `https://<project>.vercel.app` |
+
+### 4. Google Cloud Console — add the production redirect
+
+The same OAuth client used for local dev works in production — just add
+its production URLs alongside the existing `localhost` ones (**Credentials**
+→ your OAuth client):
+
+- **Authorized redirect URIs**: add `https://<your-domain>/api/auth/callback/google`
+- **Authorized JavaScript origins**: add `https://<your-domain>` (no path,
+  no trailing slash)
+
+If the OAuth consent screen is still in **Testing** status, only accounts
+added as test users can sign in — move it to **Production** (or add every
+family member's Google account as a test user) before anyone besides you
+tries to sign in.
+
+### 5. First deploy
+
+Push to `main` (or click **Deploy** in Vercel). Sign in with Google
+yourself first — this claims any pre-existing unclaimed data (see
+[Authentication](#authentication)) onto your account. Everyone who signs in
+after that gets their own empty ledger.
 
 ## Installable PWA
 
