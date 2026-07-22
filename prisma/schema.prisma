@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Receipt {
+  id        String        @id @default(cuid())
+  store     String
+  date      DateTime
+  createdAt DateTime      @default(now())
+  items     ReceiptItem[]
+}
+
+model ReceiptItem {
+  id           String  @id @default(cuid())
+  receiptId    String
+  receipt      Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  name         String
+  price        Float
+  isGlutenFree Boolean @default(false)
+  regularPrice Float   @default(0)
+}
+
+model YearSetting {
+  id   String @id @default(cuid())
+  year Int    @unique
+  agi  Float  @default(0)
+}
