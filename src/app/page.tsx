@@ -1,70 +1,76 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { EquivalentEstimate, ExtractedItem, Receipt, ReceiptItem } from "@/types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Receipt, ReceiptItem } from "@/types";
 import { YearSelect } from "@/components/ledger/YearSelect";
 import { ReceiptList } from "@/components/ledger/ReceiptList";
 import { DeductionTape } from "@/components/tape/DeductionTape";
 import { AddReceiptModal } from "@/components/modal/AddReceiptModal";
 import { yearTotal } from "@/lib/services/deduction-calculator";
+import {
+  ApiClientError,
+  createReceipt,
+  deleteReceipt,
+  estimateEquivalentPrices,
+  extractReceiptItems,
+  fetchReceipts,
+  getAgiForYear,
+  setAgiForYear,
+} from "@/lib/api-client";
 
 const currentYear = new Date().getFullYear();
+const AGI_SAVE_DEBOUNCE_MS = 400;
 
-// Mock seed data — proves the components render/interact correctly before
-// Phase 7 wires them to the real API routes.
-const MOCK_RECEIPTS: Receipt[] = [
-  {
-    id: "mock-1",
-    store: "Trader Joe's",
-    date: `${currentYear}-03-15`,
-    createdAt: `${currentYear}-03-15T00:00:00.000Z`,
-    items: [
-      { name: "GF Sandwich Bread", price: 6.49, isGlutenFree: true, regularPrice: 3.29 },
-      { name: "Bananas", price: 1.2, isGlutenFree: false, regularPrice: 0 },
-    ],
-  },
-  {
-    id: "mock-2",
-    store: "Sprouts",
-    date: `${currentYear}-02-02`,
-    createdAt: `${currentYear}-02-02T00:00:00.000Z`,
-    items: [{ name: "GF Pasta", price: 4.99, isGlutenFree: true, regularPrice: 1.79 }],
-  },
-];
-
-function uid(): string {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-async function mockDelay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function mockExtract(file: File): Promise<ExtractedItem[]> {
-  void file;
-  await mockDelay(600);
-  return [
-    { name: "GF Sandwich Bread", price: 6.49, likelyGlutenFree: true },
-    { name: "Bananas", price: 1.2, likelyGlutenFree: false },
-  ];
-}
-
-async function mockEstimate(
-  items: { name: string; purchasedPrice: number }[],
-): Promise<EquivalentEstimate[]> {
-  await mockDelay(500);
-  return items.map((item) => ({
-    name: item.name,
-    estimatedRegularPrice: Math.max(0, Math.round((item.purchasedPrice - 3.2) * 100) / 100),
-  }));
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof ApiClientError ? err.message : fallback;
 }
 
 export default function Home() {
-  const [receipts, setReceipts] = useState<Receipt[]>(MOCK_RECEIPTS);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [receiptsLoading, setReceiptsLoading] = useState(true);
+  const [receiptsError, setReceiptsError] = useState<string | null>(null);
+
   const [agiByYear, setAgiByYear] = useState<Record<number, number>>({});
+  const [agiError, setAgiError] = useState<string | null>(null);
+
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [openReceiptId, setOpenReceiptId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const agiSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadReceipts = useCallback(async () => {
+    setReceiptsLoading(true);
+    setReceiptsError(null);
+    try {
+      const data = await fetchReceipts();
+      setReceipts(data);
+    } catch (err) {
+      setReceiptsError(errorMessage(err, "Could not load your receipts."));
+    } finally {
+      setReceiptsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadReceipts();
+  }, [loadReceipts]);
+
+  useEffect(() => {
+    if (selectedYear in agiByYear) return;
+    let cancelled = false;
+    getAgiForYear(selectedYear)
+      .then((agi) => {
+        if (!cancelled) setAgiByYear((prev) => ({ ...prev, [selectedYear]: agi }));
+      })
+      .catch((err) => {
+        if (!cancelled) setAgiError(errorMessage(err, "Could not load AGI for that year."));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedYear, agiByYear]);
 
   const years = useMemo(() => {
     const set = new Set<number>([selectedYear]);
@@ -80,13 +86,34 @@ export default function Home() {
 
   const total = useMemo(() => yearTotal(receiptsForYear), [receiptsForYear]);
 
+  function handleAgiChange(agi: number) {
+    setAgiError(null);
+    setAgiByYear((prev) => ({ ...prev, [selectedYear]: agi }));
+
+    if (agiSaveTimer.current) clearTimeout(agiSaveTimer.current);
+    agiSaveTimer.current = setTimeout(async () => {
+      try {
+        await setAgiForYear(selectedYear, agi);
+      } catch (err) {
+        setAgiError(errorMessage(err, "Could not save AGI for that year."));
+      }
+    }, AGI_SAVE_DEBOUNCE_MS);
+  }
+
+  async function handleDelete(id: string) {
+    setActionError(null);
+    try {
+      await deleteReceipt(id);
+      setReceipts((prev) => prev.filter((r) => r.id !== id));
+    } catch (err) {
+      setActionError(errorMessage(err, "Could not delete that receipt."));
+    }
+  }
+
   async function handleSave(receipt: { store: string; date: string; items: ReceiptItem[] }) {
-    await mockDelay(400);
-    setReceipts((prev) => [
-      ...prev,
-      { ...receipt, id: uid(), createdAt: new Date().toISOString() },
-    ]);
-    setSelectedYear(new Date(receipt.date).getFullYear());
+    const saved = await createReceipt(receipt);
+    setReceipts((prev) => [...prev, saved]);
+    setSelectedYear(new Date(saved.date).getFullYear());
   }
 
   return (
@@ -105,6 +132,12 @@ export default function Home() {
         <YearSelect years={years} selectedYear={selectedYear} onChange={setSelectedYear} />
       </div>
 
+      {(receiptsError || agiError || actionError) && (
+        <div className="mx-auto mb-4 max-w-[1080px] rounded bg-berry/10 px-3 py-2 text-sm text-berry" role="alert">
+          {receiptsError || agiError || actionError}
+        </div>
+      )}
+
       <div className="mx-auto grid max-w-[1080px] gap-7 md:grid-cols-[1.5fr_1fr]">
         <div>
           <div className="mb-3.5 flex items-center justify-between">
@@ -119,22 +152,24 @@ export default function Home() {
               + Add receipt
             </button>
           </div>
-          <ReceiptList
-            receipts={receiptsForYear}
-            year={selectedYear}
-            openReceiptId={openReceiptId}
-            onToggle={(id) => setOpenReceiptId((prev) => (prev === id ? null : id))}
-            onDelete={(id) => setReceipts((prev) => prev.filter((r) => r.id !== id))}
-          />
+          {receiptsLoading ? (
+            <div className="py-9 text-center text-sm text-ink-soft">Loading receipts…</div>
+          ) : (
+            <ReceiptList
+              receipts={receiptsForYear}
+              year={selectedYear}
+              openReceiptId={openReceiptId}
+              onToggle={(id) => setOpenReceiptId((prev) => (prev === id ? null : id))}
+              onDelete={handleDelete}
+            />
+          )}
         </div>
 
         <div className="order-first md:order-none">
           <div className="sticky top-5">
             <DeductionTape
               agi={agiByYear[selectedYear] ?? 0}
-              onAgiChange={(agi) =>
-                setAgiByYear((prev) => ({ ...prev, [selectedYear]: agi }))
-              }
+              onAgiChange={handleAgiChange}
               total={total}
             />
           </div>
@@ -144,8 +179,8 @@ export default function Home() {
       <AddReceiptModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onExtract={mockExtract}
-        onEstimate={mockEstimate}
+        onExtract={extractReceiptItems}
+        onEstimate={estimateEquivalentPrices}
         onSave={handleSave}
       />
     </main>
