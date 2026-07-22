@@ -153,7 +153,9 @@ export default function Home() {
             </button>
           </div>
           {receiptsLoading ? (
-            <div className="py-9 text-center text-sm text-ink-soft">Loading receipts…</div>
+            <div className="py-9 text-center text-sm text-ink-soft" role="status" aria-live="polite">
+              Loading receipts…
+            </div>
           ) : (
             <ReceiptList
               receipts={receiptsForYear}

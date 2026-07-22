@@ -45,6 +45,7 @@ export function AddReceiptModal({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -54,10 +55,23 @@ export function AddReceiptModal({
       setItems([]);
       setError(null);
       setSaving(false);
+      dialogRef.current?.focus();
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
+
+  const dialogTitle =
+    mode === "upload" ? "Add a receipt" : mode === "review" ? "Review before saving" : "Working…";
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -170,7 +184,14 @@ export function AddReceiptModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="max-h-[88vh] w-full max-w-[520px] overflow-y-auto rounded-lg border border-rule bg-paper-raised p-6">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={dialogTitle}
+        tabIndex={-1}
+        className="max-h-[88vh] w-full max-w-[520px] overflow-y-auto rounded-lg border border-rule bg-paper-raised p-6 focus:outline-none"
+      >
         {mode === "upload" && (
           <>
             <div className="mb-4 flex items-center justify-between">
@@ -218,8 +239,11 @@ export function AddReceiptModal({
         )}
 
         {mode === "loading" && (
-          <div className="py-6 text-center text-sm text-ink-soft">
-            <div className="mx-auto mb-2.5 h-[22px] w-[22px] animate-spin rounded-full border-[3px] border-rule border-t-fern" />
+          <div className="py-6 text-center text-sm text-ink-soft" role="status" aria-live="polite">
+            <div
+              aria-hidden="true"
+              className="mx-auto mb-2.5 h-[22px] w-[22px] animate-spin rounded-full border-[3px] border-rule border-t-fern"
+            />
             {loadingMessage}
           </div>
         )}
