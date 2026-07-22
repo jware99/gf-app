@@ -32,7 +32,8 @@ export async function POST(request: NextRequest) {
       estimatedRegularPrice: estimates.get(item.name) ?? 0,
     }));
     return NextResponse.json({ items });
-  } catch {
+  } catch (err) {
+    console.error("Equivalent-price estimation failed:", err);
     return internalError("Could not estimate regular prices.");
   }
 }

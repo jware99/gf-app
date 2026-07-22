@@ -40,7 +40,8 @@ export async function POST(request: NextRequest) {
       image.type,
     );
     return NextResponse.json({ items });
-  } catch {
+  } catch (err) {
+    console.error("Receipt extraction failed:", err);
     return internalError("Could not read that receipt image.");
   }
 }

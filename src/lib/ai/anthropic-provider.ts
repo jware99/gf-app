@@ -66,31 +66,34 @@ export class AnthropicProvider implements AIProvider {
   ): Promise<ExtractedItem[]> {
     const supportedMediaType = assertSupportedImageMediaType(mediaType);
 
-    try {
-      const message = await this.client.messages.create({
-        model: this.model,
-        max_tokens: 1000,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: supportedMediaType,
-                  data: imageBase64,
-                },
+    // Not caught here: a thrown error means the API call itself failed
+    // (bad key, rate limit, network) — that should surface as a 500, not
+    // be confused with the model legitimately returning no items.
+    const message = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 1000,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: supportedMediaType,
+                data: imageBase64,
               },
-              {
-                type: "text",
-                text: 'Extract every purchased line item from this grocery receipt with its price. For each, judge whether it is a gluten-free-labeled product (e.g. says "gluten free" / "GF" on the label, or is a naturally gluten-free specialty substitute like almond flour, GF bread, GF pasta). Respond with ONLY a JSON array, no markdown fences, no commentary, in exactly this format: [{"name": string, "price": number, "likely_gluten_free": boolean}]. If you cannot read it, return [].',
-              },
-            ],
-          },
-        ],
-      });
+            },
+            {
+              type: "text",
+              text: 'Extract every purchased line item from this grocery receipt with its price. For each, judge whether it is a gluten-free-labeled product (e.g. says "gluten free" / "GF" on the label, or is a naturally gluten-free specialty substitute like almond flour, GF bread, GF pasta). Respond with ONLY a JSON array, no markdown fences, no commentary, in exactly this format: [{"name": string, "price": number, "likely_gluten_free": boolean}]. If you cannot read it, return [].',
+            },
+          ],
+        },
+      ],
+    });
 
+    try {
       const raw = firstTextBlock(message);
       const parsed = JSON.parse(stripCodeFences(raw)) as unknown;
       if (!Array.isArray(parsed)) return [];
@@ -102,7 +105,8 @@ export class AnthropicProvider implements AIProvider {
           price: typeof item.price === "number" ? item.price : 0,
           likelyGlutenFree: Boolean(item.likely_gluten_free),
         }));
-    } catch {
+    } catch (err) {
+      console.error("Failed to parse receipt extraction response:", err);
       return [];
     }
   }
@@ -110,23 +114,24 @@ export class AnthropicProvider implements AIProvider {
   async estimateEquivalentPrices(
     items: { name: string; purchasedPrice: number }[],
   ): Promise<EquivalentEstimate[]> {
-    try {
-      const message = await this.client.messages.create({
-        model: this.model,
-        max_tokens: 1000,
-        messages: [
-          {
-            role: "user",
-            content: `For each gluten-free grocery product below, estimate the typical price of the standard gluten-containing equivalent product at an average US grocery store. Respond with ONLY a JSON array, no markdown fences, no commentary, in exactly this format: [{"name": string, "estimated_regular_price": number}]. Items: ${JSON.stringify(
-              items.map((i) => ({
-                name: i.name,
-                purchased_price: i.purchasedPrice,
-              })),
-            )}`,
-          },
-        ],
-      });
+    // Not caught here — same reasoning as extractReceiptItems above.
+    const message = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 1000,
+      messages: [
+        {
+          role: "user",
+          content: `For each gluten-free grocery product below, estimate the typical price of the standard gluten-containing equivalent product at an average US grocery store. Respond with ONLY a JSON array, no markdown fences, no commentary, in exactly this format: [{"name": string, "estimated_regular_price": number}]. Items: ${JSON.stringify(
+            items.map((i) => ({
+              name: i.name,
+              purchased_price: i.purchasedPrice,
+            })),
+          )}`,
+        },
+      ],
+    });
 
+    try {
       const raw = firstTextBlock(message);
       const parsed = JSON.parse(stripCodeFences(raw)) as unknown;
       if (!Array.isArray(parsed)) return [];
@@ -140,7 +145,8 @@ export class AnthropicProvider implements AIProvider {
               ? item.estimated_regular_price
               : 0,
         }));
-    } catch {
+    } catch (err) {
+      console.error("Failed to parse equivalent-price estimation response:", err);
       return [];
     }
   }
