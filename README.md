@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Crumb Trail
 
-## Getting Started
+A receipt tracker for people with celiac disease. Photograph a grocery
+receipt, flag the gluten-free items, estimate the extra cost over the
+regular equivalent product, and track the running total against the IRS
+7.5%-of-AGI medical-expense floor.
 
-First, run the development server:
+## Stack
+
+Next.js 15 (App Router, TypeScript) · Tailwind CSS · Prisma (SQLite dev /
+Postgres-ready for prod) · Zod · Anthropic TypeScript SDK · Vitest.
+
+## Architecture
+
+UI components → API routes (`src/app/api/**`) → services
+(`src/lib/services/**`) → provider/repository interfaces
+(`src/lib/ai/ai-provider.ts`, `src/lib/db/receipt-repository.ts`).
+
+Route handlers and services never import the concrete `AnthropicProvider` or
+`PrismaReceiptRepository` classes directly — they resolve them by interface
+from `src/lib/container.ts`. Swapping the AI provider or the database means
+writing one new file that implements the relevant interface, plus a
+one-line change in the container.
+
+## Getting started
 
 ```bash
+npm install
+cp .env.example .env   # fill in a real ANTHROPIC_API_KEY
+npx prisma migrate dev # creates the local SQLite dev database
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `npm run dev` — start the dev server
+- `npm run build` / `npm run start` — production build/serve
+- `npm run typecheck` — TypeScript, no emit
+- `npm run test` — Vitest unit + API integration tests
+- `npm run lint` — ESLint
 
-## Learn More
+## Environment variables
 
-To learn more about Next.js, take a look at the following resources:
+See [.env.example](.env.example). `ANTHROPIC_API_KEY` and `DATABASE_URL` are
+validated eagerly at startup by `src/lib/config.ts` — the app fails loud
+with a clear message if either is missing.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Installable PWA
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The app ships a manifest (`public/manifest.webmanifest`) and a minimal
+service worker (`public/sw.js`) that caches the app shell, so it can be
+installed to a phone's home screen directly from the browser (no app-store
+step).
 
-## Deploy on Vercel
+If a native App Store / Play Store build is wanted later, the next step is
+wrapping this same Next.js build with [Capacitor](https://capacitorjs.com/) —
+that has intentionally not been done yet, but nothing in this codebase
+blocks it.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Out of scope for v1
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+CSV export, multi-user auth, attaching a doctor's letter/prescription, push
+notifications, multi-currency. The layered architecture is designed so each
+of these can be added later without touching the core services.
