@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens ported from the Crumb Trail prototype's paper/ink/wheat/fern
+ * palette and Space Mono + IBM Plex Sans type pairing. Tailwind v4 favors
+ * CSS-first theme config over tailwind.config.ts, so this @theme block is
+ * the single place to change the whole look, per the stack rationale.
+ */
+@theme inline {
+  --color-paper: #eef1e9;
+  --color-paper-raised: #f7f8f3;
+  --color-ink: #1b3a2b;
+  --color-ink-soft: #4a5d52;
+  --color-wheat: #c99a3b;
+  --color-fern: #4f7942;
+  --color-berry: #b23a48;
+  --color-rule: #c9c4b4;
+
+  --font-sans: var(--font-ibm-plex-sans);
+  --font-mono: var(--font-space-mono);
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
