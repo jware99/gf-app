@@ -1,14 +1,25 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 import { NextRequest } from "next/server";
 import { __setTestOverrides } from "@/lib/container";
 import { FakeReceiptRepository } from "../helpers/fake-receipt-repository";
 import { FakeAIProvider } from "../helpers/fake-ai-provider";
 
+// Every route calls auth() first; mock it to a fixed signed-in session so
+// these tests exercise routing/validation/business logic, not Auth.js
+// itself (which has no real Google credentials in the test environment).
+vi.mock("@/lib/auth", () => ({
+  auth: vi.fn(),
+}));
+
+import { auth } from "@/lib/auth";
 import * as receiptsRoute from "@/app/api/receipts/route";
 import * as receiptByIdRoute from "@/app/api/receipts/[id]/route";
 import * as extractRoute from "@/app/api/receipts/extract/route";
 import * as estimateRoute from "@/app/api/receipts/estimate/route";
 import * as settingsRoute from "@/app/api/settings/route";
+
+const TEST_USER_ID = "test-user-1";
 
 function jsonRequest(url: string, method: string, body?: unknown) {
   return new NextRequest(url, {
@@ -22,6 +33,9 @@ beforeEach(() => {
   __setTestOverrides({
     aiProvider: new FakeAIProvider(),
     receiptRepository: new FakeReceiptRepository(),
+  });
+  (auth as unknown as Mock).mockResolvedValue({
+    user: { id: TEST_USER_ID, email: "test@example.com", name: "Test User" },
   });
 });
 
@@ -222,5 +236,35 @@ describe("GET/PUT /api/settings", () => {
     );
     const body = await getRes.json();
     expect(body).toEqual({ year: 2026, agi: 60000 });
+  });
+});
+
+describe("authentication", () => {
+  it("rejects requests with no session with the standard error shape", async () => {
+    (auth as unknown as Mock).mockResolvedValue(null);
+
+    const res = await receiptsRoute.GET(new NextRequest("http://localhost/api/receipts"));
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("scopes receipts to the signed-in user", async () => {
+    await receiptsRoute.POST(
+      jsonRequest("http://localhost/api/receipts", "POST", {
+        store: "Trader Joe's",
+        date: "2026-03-15",
+        items: [{ name: "GF Bread", price: 6.49, isGlutenFree: true, regularPrice: 3.29 }],
+      }),
+    );
+
+    (auth as unknown as Mock).mockResolvedValue({
+      user: { id: "another-user", email: "other@example.com" },
+    });
+    const res = await receiptsRoute.GET(
+      new NextRequest("http://localhost/api/receipts?year=2026"),
+    );
+    const body = await res.json();
+    expect(body.receipts).toEqual([]);
   });
 });

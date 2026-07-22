@@ -19,11 +19,24 @@ export interface Receipt {
  * lib/container.ts), never on PrismaReceiptRepository or PrismaClient
  * directly — swapping SQLite for Postgres, or Prisma for another store,
  * should mean writing one new file that implements this interface.
+ *
+ * Every method is scoped to a signed-in user's `userId` — callers (routes)
+ * get it from `auth()`, never from client input, so one user can never
+ * read/modify another's data. `delete` must verify ownership, not just id.
  */
 export interface ReceiptRepository {
-  list(year?: number): Promise<Receipt[]>;
-  create(receipt: Omit<Receipt, "id" | "createdAt">): Promise<Receipt>;
-  delete(id: string): Promise<void>;
-  getAgiForYear(year: number): Promise<number | null>;
-  setAgiForYear(year: number, agi: number): Promise<void>;
+  list(userId: string, year?: number): Promise<Receipt[]>;
+  create(
+    userId: string,
+    receipt: Omit<Receipt, "id" | "createdAt">,
+  ): Promise<Receipt>;
+  delete(userId: string, id: string): Promise<void>;
+  getAgiForYear(userId: string, year: number): Promise<number | null>;
+  setAgiForYear(userId: string, year: number, agi: number): Promise<void>;
+  /**
+   * One-time migration hook: assigns every pre-auth row (userId IS NULL)
+   * to `userId`. Called from auth.ts's `events.createUser`, exactly once,
+   * the first time any account ever signs in.
+   */
+  claimOrphanedReceipts(userId: string): Promise<void>;
 }

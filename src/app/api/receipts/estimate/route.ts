@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { getReceiptService } from "@/lib/container";
 import { estimateRequestSchema } from "@/lib/validation/schemas";
-import { checkRateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
-import { apiError, internalError, rateLimitedError, validationError } from "@/lib/api-error";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { apiError, internalError, rateLimitedError, unauthorizedError, validationError } from "@/lib/api-error";
 
 const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60_000;
 
 export async function POST(request: NextRequest) {
-  const rateLimit = checkRateLimit(
-    `estimate:${clientKeyFromRequest(request)}`,
-    RATE_LIMIT,
-    RATE_WINDOW_MS,
-  );
+  const session = await auth();
+  if (!session?.user) return unauthorizedError();
+
+  const rateLimit = checkRateLimit(`estimate:${session.user.id}`, RATE_LIMIT, RATE_WINDOW_MS);
   if (!rateLimit.allowed) return rateLimitedError();
 
   let body: unknown;

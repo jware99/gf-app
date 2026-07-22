@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { signOut, useSession } from "next-auth/react";
 import type { Receipt, ReceiptItem } from "@/types";
 import { YearSelect } from "@/components/ledger/YearSelect";
 import { ReceiptList } from "@/components/ledger/ReceiptList";
@@ -26,6 +28,8 @@ function errorMessage(err: unknown, fallback: string): string {
 }
 
 export default function Home() {
+  const { data: session } = useSession();
+
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [receiptsLoading, setReceiptsLoading] = useState(true);
   const [receiptsError, setReceiptsError] = useState<string | null>(null);
@@ -129,7 +133,32 @@ export default function Home() {
             medical-expense deduction.
           </p>
         </div>
-        <YearSelect years={years} selectedYear={selectedYear} onChange={setSelectedYear} />
+        <div className="flex items-center gap-4">
+          <YearSelect years={years} selectedYear={selectedYear} onChange={setSelectedYear} />
+          {session?.user && (
+            <div className="flex items-center gap-2">
+              {session.user.image && (
+                <Image
+                  src={session.user.image}
+                  alt=""
+                  width={28}
+                  height={28}
+                  className="rounded-full"
+                />
+              )}
+              <span className="hidden text-sm text-ink-soft sm:inline">
+                {session.user.name ?? session.user.email}
+              </span>
+              <button
+                type="button"
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="rounded-[3px] border-2 border-ink px-3 py-1.5 text-xs font-semibold text-ink transition-transform active:translate-y-px"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {(receiptsError || agiError || actionError) && (

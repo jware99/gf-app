@@ -42,8 +42,3 @@ export function checkRateLimit(
   state.count += 1;
   return { allowed: true };
 }
-
-export function clientKeyFromRequest(request: Request): string {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  return forwardedFor?.split(",")[0]?.trim() || "local";
-}

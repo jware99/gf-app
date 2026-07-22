@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { getReceiptService } from "@/lib/container";
 import { validateImageFile } from "@/lib/validation/image";
-import { checkRateLimit, clientKeyFromRequest } from "@/lib/rate-limit";
-import { apiError, internalError, rateLimitedError } from "@/lib/api-error";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { apiError, internalError, rateLimitedError, unauthorizedError } from "@/lib/api-error";
 
 const RATE_LIMIT = 10;
 const RATE_WINDOW_MS = 60_000;
 
 export async function POST(request: NextRequest) {
-  const rateLimit = checkRateLimit(
-    `extract:${clientKeyFromRequest(request)}`,
-    RATE_LIMIT,
-    RATE_WINDOW_MS,
-  );
+  const session = await auth();
+  if (!session?.user) return unauthorizedError();
+
+  const rateLimit = checkRateLimit(`extract:${session.user.id}`, RATE_LIMIT, RATE_WINDOW_MS);
   if (!rateLimit.allowed) return rateLimitedError();
 
   let formData: FormData;

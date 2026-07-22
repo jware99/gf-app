@@ -7,6 +7,9 @@ import type { Receipt, ReceiptRepository } from "@/lib/db/receipt-repository";
  * external call is delegated to the injected interfaces, so this class is
  * easy to test with both interfaces mocked. Route handlers call this, and
  * only this, for receipt/AGI business logic.
+ *
+ * `userId` is threaded through every data-access method — it always comes
+ * from the caller's `auth()` session, never from client input.
  */
 export class ReceiptService {
   constructor(
@@ -28,26 +31,27 @@ export class ReceiptService {
     return new Map(estimates.map((e) => [e.name, e.estimatedRegularPrice]));
   }
 
-  getLedger(year?: number): Promise<Receipt[]> {
-    return this.receiptRepository.list(year);
+  getLedger(userId: string, year?: number): Promise<Receipt[]> {
+    return this.receiptRepository.list(userId, year);
   }
 
   saveReceipt(
+    userId: string,
     receipt: Omit<Receipt, "id" | "createdAt">,
   ): Promise<Receipt> {
-    return this.receiptRepository.create(receipt);
+    return this.receiptRepository.create(userId, receipt);
   }
 
-  deleteReceipt(id: string): Promise<void> {
-    return this.receiptRepository.delete(id);
+  deleteReceipt(userId: string, id: string): Promise<void> {
+    return this.receiptRepository.delete(userId, id);
   }
 
-  async getAgiForYear(year: number): Promise<number> {
-    const agi = await this.receiptRepository.getAgiForYear(year);
+  async getAgiForYear(userId: string, year: number): Promise<number> {
+    const agi = await this.receiptRepository.getAgiForYear(userId, year);
     return agi ?? 0;
   }
 
-  setAgiForYear(year: number, agi: number): Promise<void> {
-    return this.receiptRepository.setAgiForYear(year, agi);
+  setAgiForYear(userId: string, year: number, agi: number): Promise<void> {
+    return this.receiptRepository.setAgiForYear(userId, year, agi);
   }
 }

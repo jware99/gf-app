@@ -17,6 +17,16 @@ const envSchema = z.object({
   DATABASE_URL: z
     .string({ message: "DATABASE_URL is required (Prisma connection string)." })
     .min(1, "DATABASE_URL is required (Prisma connection string)."),
+  AUTH_SECRET: z
+    .string({ message: "AUTH_SECRET is required (generate with `npx auth secret`)." })
+    .min(1, "AUTH_SECRET is required (generate with `npx auth secret`)."),
+  AUTH_GOOGLE_ID: z
+    .string({ message: "AUTH_GOOGLE_ID is required (Google OAuth Client ID)." })
+    .min(1, "AUTH_GOOGLE_ID is required (Google OAuth Client ID)."),
+  AUTH_GOOGLE_SECRET: z
+    .string({ message: "AUTH_GOOGLE_SECRET is required (Google OAuth Client Secret)." })
+    .min(1, "AUTH_GOOGLE_SECRET is required (Google OAuth Client Secret)."),
+  AUTH_URL: z.string().min(1).optional(),
 });
 
 function loadConfig() {

@@ -29,6 +29,10 @@ export function notFoundError(message: string): NextResponse<ApiErrorBody> {
   return apiError(404, "NOT_FOUND", message);
 }
 
+export function unauthorizedError(): NextResponse<ApiErrorBody> {
+  return apiError(401, "UNAUTHORIZED", "You must be signed in to do that.");
+}
+
 export function rateLimitedError(): NextResponse<ApiErrorBody> {
   return apiError(
     429,

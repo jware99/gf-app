@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Space_Mono, IBM_Plex_Sans } from "next/font/google";
 import { PwaRegister } from "@/components/PwaRegister";
+import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 import "./globals.css";
 
 const spaceMono = Space_Mono({
@@ -45,8 +46,10 @@ export default function RootLayout({
       <body
         className={`${spaceMono.variable} ${ibmPlexSans.variable} antialiased`}
       >
-        <PwaRegister />
-        {children}
+        <AuthSessionProvider>
+          <PwaRegister />
+          {children}
+        </AuthSessionProvider>
       </body>
     </html>
   );

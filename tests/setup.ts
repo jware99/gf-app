@@ -7,3 +7,6 @@
 process.env.ANTHROPIC_API_KEY ??= "sk-ant-test-placeholder";
 process.env.ANTHROPIC_MODEL ??= "claude-sonnet-5";
 process.env.DATABASE_URL ??= "file:./test.db";
+process.env.AUTH_SECRET ??= "test-secret-not-for-production";
+process.env.AUTH_GOOGLE_ID ??= "test-google-client-id";
+process.env.AUTH_GOOGLE_SECRET ??= "test-google-client-secret";
